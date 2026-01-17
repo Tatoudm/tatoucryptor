@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # 🛡️ Triple-Lock Vault
 A hardware-bound file encryption tool using Python.
 
