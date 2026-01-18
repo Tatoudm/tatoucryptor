@@ -1,3 +1,5 @@
 customtkinter
 cryptography
 wmi
+argon2-cffi
+pywin32
