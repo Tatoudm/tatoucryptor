@@ -11,7 +11,7 @@ class SecureVaultTPM(ctk.CTk):
     def __init__(self):
         super().__init__()
 
-        self.title("Tatoucryptor v3.0 - TPM/DPAPI Edition")
+        self.title("Tatoucryptor - TPM/DPAPI Edition")
         self.geometry("600x650")
         ctk.set_appearance_mode("dark")
 
