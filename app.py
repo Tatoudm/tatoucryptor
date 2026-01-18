@@ -10,15 +10,14 @@ class SecureVaultApp(ctk.CTk):
     def __init__(self):
         super().__init__()
 
-        self.title("Tatoucryptor v2.0")
+        self.title("Tatoucryptor")
         self.geometry("600x650")
         ctk.set_appearance_mode("dark")
 
-        # Configuration Argon2id
         self.TIME_COST = 3
-        self.MEMORY_COST = 65536  # 64 MB
+        self.MEMORY_COST = 65536 
         self.PARALLELISM = 4
-        self.CHUNK_SIZE = 64 * 1024  # 64KB pour le streaming
+        self.CHUNK_SIZE = 64 * 1024 
 
         self.label = ctk.CTkLabel(self, text="🛡️ Triple-Lock Vault GCM", font=("Roboto", 24, "bold"))
         self.label.pack(pady=15)
@@ -68,7 +67,6 @@ class SecureVaultApp(ctk.CTk):
         
         combined = f"{usb_id}-{pc_id}-{password}".encode()
         
-        # Dérivation Argon2id
         key = hash_secret_raw(
             secret=combined,
             salt=salt,
@@ -123,8 +121,8 @@ class SecureVaultApp(ctk.CTk):
 
                     new_path = path + ".vault"
                     with open(new_path, "wb") as f_out:
-                        f_out.write(salt)   # 16 bytes
-                        f_out.write(nonce)  # 12 bytes
+                        f_out.write(salt)  
+                        f_out.write(nonce) 
                         f_out.write(ciphertext)
                 
                 else:
