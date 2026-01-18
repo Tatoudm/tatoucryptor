@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # 🛡️ Triple-Lock Vault
 A hardware-bound file encryption tool using Python.
 
@@ -11,7 +10,3 @@ A hardware-bound file encryption tool using Python.
 1. Install requirements: `pip install -r requirements.txt`
 2. Run `python app.py`
 3. Connect your USB key and secure your files.
-=======
-# tatoucryptor
-A hardware-bound file encryption tool that locks data to a specific USB drive and PC hardware using AES-256
->>>>>>> 26fa1d93435c1b3e6718925956b253fb90703619
