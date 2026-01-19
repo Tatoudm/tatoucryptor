@@ -11,7 +11,7 @@ class SecureVaultTPM(ctk.CTk):
     def __init__(self):
         super().__init__()
 
-        self.title("Tatoucryptor - TPM/DPAPI Edition")
+        self.title("Tatoucryptor - TPM/DPAPI Version")
         self.geometry("600x650")
         ctk.set_appearance_mode("dark")
 
@@ -26,16 +26,17 @@ class SecureVaultTPM(ctk.CTk):
         self.label = ctk.CTkLabel(self, text="🛡️ TPM & Hardware Vault", font=("Roboto", 24, "bold"))
         self.label.pack(pady=15)
 
-        self.desc_box = ctk.CTkTextbox(self, width=500, height=140, font=("Roboto", 11))
+        self.desc_box = ctk.CTkTextbox(self, width=500, height=150, font=("Roboto", 11))
         self.desc_box.pack(pady=10)
-        self.desc_box.insert("0.0", "SECURITY STATUS: ULTRA\n"
-                                     "- KDF: Argon2id\n"
-                                     "- Cipher: AES-256-GCM\n"
-                                     "- Wrapper: Windows DPAPI (TPM-Backed)\n\n"
-                                     "LOCK: Files are bound to THIS Windows User + THIS PC + THIS USB.")
+        self.desc_box.insert("0.0", "SECURITY LOGIC:\n"
+                                     "- Derived Key: Argon2id (Password + Hardware IDs)\n"
+                                     "- Encryption: AES-256-GCM (Authenticated)\n"
+                                     "- Hardware Protection: Windows DPAPI (TPM-Backed)\n\n"
+                                     "⚠️ WARNING: Files are bound to this Windows User,\n"
+                                     "this specific PC, and this specific USB drive.")
         self.desc_box.configure(state="disabled")
 
-        self.pwd_entry = ctk.CTkEntry(self, placeholder_text="Master password...", show="*", width=350)
+        self.pwd_entry = ctk.CTkEntry(self, placeholder_text="Enter master password...", show="*", width=350)
         self.pwd_entry.pack(pady=10)
 
         self.btn_select = ctk.CTkButton(self, text="📁 Select Files", command=self.select_files)
@@ -55,18 +56,25 @@ class SecureVaultTPM(ctk.CTk):
     def get_hardware_context(self):
         try:
             c = wmi.WMI()
-            usb_id = next((disk.SerialNumber.strip() for disk in c.Win32_DiskDrive(InterfaceType="USB")), None)
+            usb_disks = [disk.SerialNumber.strip() for disk in c.Win32_DiskDrive(InterfaceType="USB")]
+            if not usb_disks:
+                return None, None
+            
             pc_id = c.Win32_ComputerSystemProduct()[0].UUID
-            return usb_id, pc_id
-        except:
+            return usb_disks[0], pc_id
+        except Exception as e:
             return None, None
 
-    def derive_master_key(self, password, salt, usb_id, pc_id):
-        combined = f"{usb_id}-{pc_id}-{password}".encode()
+    def derive_key(self, password, salt, usb_id, pc_id):
+        context = f"{usb_id}{pc_id}".encode()
         return hash_secret_raw(
-            secret=combined, salt=salt, time_cost=self.TIME_COST,
-            memory_cost=self.MEMORY_COST, parallelism=self.PARALLELISM,
-            hash_len=32, type=Type.ID
+            secret=password.encode(),
+            salt=salt + context[:16],
+            time_cost=self.TIME_COST,
+            memory_cost=self.MEMORY_COST,
+            parallelism=self.PARALLELISM,
+            hash_len=32,
+            type=Type.ID
         )
 
     def select_files(self):
@@ -79,30 +87,17 @@ class SecureVaultTPM(ctk.CTk):
         usb_id, pc_id = self.get_hardware_context()
 
         if not usb_id or not pc_id:
-            messagebox.showerror("Hardware Error", "USB Drive not detected or WMI error.")
+            messagebox.showerror("Hardware Error", "USB drive not detected or WMI error.")
             return
         
         if not pwd or not self.selected_files:
-            messagebox.showwarning("Input Error", "Password and files required.")
+            messagebox.showwarning("Input Error", "Password and files are required.")
             return
 
-        if encrypt:
-            warning_msg = (
-                "SECURITY WARNING:\n\n"
-                "You are about to lock files using TPM-backed DPAPI. "
-                "These files will become PERMANENTLY UNREADABLE if you lose or change:\n"
-                "- Your Current Windows User Account\n"
-                "- Your Physical Motherboard (TPM chip)\n"
-                "- Your Dedicated USB Drive\n"
-                "- Your Password\n\n"
-                "If you reinstall Windows or change your PC, data WILL be lost.\n"
-                "Do you want to proceed?"
-            )
-            confirm = messagebox.askyesno("Hardware & User Binding Warning", warning_msg, icon='warning')
-            if not confirm:
-                return
+        if encrypt and not messagebox.askyesno("Warning", "Bind these files to this PC and USB?"):
+            return
 
-        extra_entropy = f"{usb_id}-{pc_id}".encode()
+        entropy = f"{usb_id}-{pc_id}".encode()
         count = 0
 
         for path in self.selected_files:
@@ -113,50 +108,53 @@ class SecureVaultTPM(ctk.CTk):
                     salt = os.urandom(16)
                     nonce = os.urandom(12)
                     
-                    master_key = self.derive_master_key(pwd, salt, usb_id, pc_id)
-                    wrapped_key = win32crypt.CryptProtectData(master_key, "VaultKey", extra_entropy, None, None, 0)
+                    key = self.derive_key(pwd, salt, usb_id, pc_id)
+                    protected_salt = win32crypt.CryptProtectData(salt, "VaultSalt", entropy, None, None, 0)
 
-                    aesgcm = AESGCM(master_key)
                     with open(path, "rb") as f:
-                        ciphertext = aesgcm.encrypt(nonce, f.read(), None)
+                        data = f.read()
+
+                    aesgcm = AESGCM(key)
+                    ciphertext = aesgcm.encrypt(nonce, data, None)
 
                     with open(path + ".vault", "wb") as f:
-                        f.write(salt)
+                        f.write(struct.pack("<I", len(protected_salt)))
+                        f.write(protected_salt)
                         f.write(nonce)
-                        f.write(struct.pack("<I", len(wrapped_key))) 
-                        f.write(wrapped_key)
                         f.write(ciphertext)
-
+                
                 else:
                     if not path.endswith(".vault"): continue
                     
                     with open(path, "rb") as f:
-                        salt = f.read(16)
+                        ps_len = struct.unpack("<I", f.read(4))[0]
+                        protected_salt = f.read(ps_len)
                         nonce = f.read(12)
-                        w_len = struct.unpack("<I", f.read(4))[0]
-                        wrapped_key = f.read(w_len)
                         ciphertext = f.read()
 
-                    _, master_key = win32crypt.CryptUnprotectData(wrapped_key, extra_entropy, None, None, 0)
+                    _, salt = win32crypt.CryptUnprotectData(protected_salt, entropy, None, None, 0)
+                    key = self.derive_key(pwd, salt, usb_id, pc_id)
                     
-                    aesgcm = AESGCM(master_key)
+                    aesgcm = AESGCM(key)
                     decrypted_data = aesgcm.decrypt(nonce, ciphertext, None)
                     
-                    with open(path.replace(".vault", ""), "wb") as f:
+                    original_path = path.replace(".vault", "")
+                    with open(original_path, "wb") as f:
                         f.write(decrypted_data)
 
                 os.remove(path)
                 count += 1
+
             except Exception as e:
-                print(f"Error on {path}: {e}")
                 continue
 
         if count > 0:
             messagebox.showinfo("Success", f"Operation successful on {count} files.")
+            self.pwd_entry.delete(0, 'end')
             self.selected_files = []
             self.file_label.configure(text="No files selected", text_color="gray")
         else:
-            messagebox.showerror("Auth Failure", "Hardware mismatch, wrong password, or wrong Windows User.")
+            messagebox.showerror("Auth Failure", "Hardware mismatch, wrong password, or unauthorized user.")
 
 if __name__ == "__main__":
     app = SecureVaultTPM()

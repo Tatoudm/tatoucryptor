@@ -3,3 +3,4 @@ cryptography
 wmi
 argon2-cffi
 pywin32
+tkinter
