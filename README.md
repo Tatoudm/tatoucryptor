@@ -1,5 +1,8 @@
 # 🛡️ Tatoucryptor
 
+> [!NOTE]
+> Maintenance Status: This project is now in low-maintenance mode. While the core features are stable, updates will be rare and focused only on critical fixes.
+
 Tatoucryptor is a high-grade file encryption suite designed for Windows. It implements a **Triple-Lock** philosophy, ensuring that files are not just password-protected, but physically bound to your hardware.
 
 The project provides two distinct security architectures (Standard & TPM) depending on the user's threat model.
